@@ -1,0 +1,13 @@
+LICENSE
+setup.cfg
+setup.py
+cebpostagger/__init__.py
+cebpostagger/repos.py
+cebpostagger/tagger.py
+cebpostagger/utilities.py
+cebpostagger/wrappers.py
+cebpostagger.egg-info/PKG-INFO
+cebpostagger.egg-info/SOURCES.txt
+cebpostagger.egg-info/dependency_links.txt
+cebpostagger.egg-info/requires.txt
+cebpostagger.egg-info/top_level.txt
