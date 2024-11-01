@@ -18,6 +18,7 @@ Accompanying methodology of the paper on _Non-Literal Binary Classification On C
 
 -   `pip install -r requirements.txt`
 -   `pip install cebpostagger`
+-   `pip install setuptools` 
 -   `python setup.py install`
 
 ## Test if POS works
