@@ -56,3 +56,4 @@ webencodings==0.5.1
 widgetsnbextension==3.2.1
 win-unicode-console==0.5
 setuptools==75.2.0
+torch == 2.5.1
