@@ -5,16 +5,10 @@ import os
 Write contents to file
 Default is per_line and mode is 'w'
 '''
-
-
 def write_file(name=None, contents=[], per_line=True, mode="w", add_newline=True, no_encode=False, append_newline=False):
     if name:
-        cwd = os.getcwd()
-        if '/src' in cwd:
-            cwd = cwd.replace('/src', '')
-
-        name = cwd + '/' + name
-        sys.path.insert(0, name)
+        
+        name = sys.prefix + '/' + name
 
         f = open(name, mode)
         string = ""
@@ -35,25 +29,19 @@ def write_file(name=None, contents=[], per_line=True, mode="w", add_newline=True
             f.write(string)
 
         f.close()
-
+    
     return None
-
 
 '''
 Returns contents of a file
 Can specify start and end of contents in reading a file
 '''
-
-
 def read_file(name=None, start=None, end=None, strip=False, dict_format=False, decode=False):
     if name:
-        cwd = os.getcwd()
-        if '/src' in cwd:
-            cwd = cwd.replace('/src', '')
 
-        name = os.path.join(cwd, name)
-        sys.path.insert(0, name)
-
+        name = os.path.join(os.path.realpath(
+    os.path.join(os.getcwd(), os.path.dirname(__file__))),name)
+        
         f = open(name, "r")
         contents = []
         dictionary = {}
@@ -75,3 +63,52 @@ def read_file(name=None, start=None, end=None, strip=False, dict_format=False, d
 
         return contents
     return None
+
+
+'''
+Get the dictionary entries
+'''
+def get_entries():
+	entries = read_file(name='data/cebposdict.txt', strip=True, dict_format=True)
+
+	func_words = ['CONJ', 'DET', 'PART', 'PRON']
+
+	for func in func_words:
+		words = read_file(name='data/function_words/' + func + '.txt', strip=True)
+
+		for word in words:
+			if word in entries:
+				entries[word].append(func)
+			else:
+				entries[word] = [func]
+
+	return entries
+
+
+
+dictionary = get_entries()
+
+
+'''
+Search term in dictionary
+'''
+def search(term=''):
+	term = term.lower()
+	if term not in dictionary:
+		term = term.replace('o', 'u')
+		term = term.replace('e', 'i')
+
+	if term not in dictionary:
+		return None
+
+	return dictionary[term]
+
+
+'''
+Checks if the term exists in the dictionary
+'''
+def is_entry(term=''):
+	term = term.lower()
+	term = term.replace('o', 'u')
+	term = term.replace('e', 'i')
+	return term in dictionary

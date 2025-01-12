@@ -1,8 +1,8 @@
 import string
 # from polyglot.text import Text
 from nltk.tokenize import word_tokenize
-from cebdict import dictionary
-from cebstemmer import stemmer
+from packages.cebdict import dictionary
+from packages.cebstemmer import stemmer
 
 from cebpostagger.utilities import read_file, write_file
 from cebpostagger.wrappers import Word
