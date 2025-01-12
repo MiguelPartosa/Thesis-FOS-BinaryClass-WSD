@@ -8,8 +8,7 @@ Fetch lexical rules
 
 
 def lexical_rules():
-    raw = read_file(Path.joinpath(Path.cwd(), 'cebpostagger',
-                    'data', 'LEXICAL.txt'), strip=True)
+    raw = read_file(Path.joinpath(Path.cwd(), 'cebpostagger', 'data', 'LEXICAL.txt'), strip=True)
     rules = []
 
     for r in raw:
@@ -34,8 +33,7 @@ Fetch contextual rules
 
 
 def contextual_rules():
-    raw = read_file(Path.joinpath(Path.cwd(), 'cebpostagger',
-                    'data', 'CONTEXTUAL.txt'), strip=True)
+    raw = read_file(Path.joinpath(Path.cwd(), 'cebpostagger', 'data', 'CONTEXTUAL.txt'), strip=True)
     rules = []
 
     for r in raw:
