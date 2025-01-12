@@ -5,7 +5,7 @@ Accompanying methodology of the paper on _Non-Literal Binary Classification On C
 # Work Used
 
 -   [Cebuano-POS-Tagger](https://github.com/rjrequina/Cebuano-POS-Tagger?tab=readme-ov-file) by Arjemariel Requina. We refactored the code to work for 3.0 versions of Python as well as some syntax and filename changes.
--
+- Stopwords removal from cebstemmer?
 
 # TODO
 
@@ -34,7 +34,7 @@ Accompanying methodology of the paper on _Non-Literal Binary Classification On C
 -   `cd ..`
 -   `python test_tagger.py`
 
-# Clustering
+# **(EXPERIMENTAL)** Clustering
 
 -   `pip install gensim`
 -   `pip install pandas`
@@ -42,6 +42,10 @@ Accompanying methodology of the paper on _Non-Literal Binary Classification On C
 -   `pip install spacy`
 -   `python -m spacy download en_core_web_sm`
 
+# Clustering normal
+- `pip install sentence_transformers`
+
 # CBERT
 
 -   `pip install torch`
+
