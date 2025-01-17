@@ -214,7 +214,7 @@ def strip_prefix(stem=None):
                 longest_prefix = prefix
             else:
                 temp_stem = deepcopy(stem)
-                temp_stem.root = string.replace(word, prefix, '')
+                temp_stem.root = word.replace(prefix,'')
                 temp_stem = lookup(stem=temp_stem)
                 if temp_stem.is_entry:
                     longest_prefix = prefix
