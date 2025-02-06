@@ -15,13 +15,9 @@ Accompanying methodology of the paper on _Non-Literal Binary Classification On C
 
 ## Setup with Colab
 
+- rename `local.env` to `.env` and add the OpenAI key
 - Open the file `Thesis_Implementation_1_2.ipynb` on colab
 - Run All
-
-
-# **(EXPERIMENTAL)** Clustering
-
--
 
 # Clustering normal
 

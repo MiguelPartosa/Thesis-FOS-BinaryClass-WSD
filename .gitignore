@@ -1,6 +1,7 @@
 *.pyc
 eval/.ipynb_checkpoints/
 .venv
+.env
 __pycache__
 
 Thesis-FOS-BinaryClass-WSD
