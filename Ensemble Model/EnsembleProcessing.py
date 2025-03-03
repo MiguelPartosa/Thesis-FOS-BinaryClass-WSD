@@ -8,7 +8,7 @@ from sklearn.metrics import silhouette_score
 from sentence_transformers import SentenceTransformer
 
 
-def process_embeddings(df, variance_threshold=0.8):
+def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
     """
     Process a dataframe with text columns to generate embeddings, 
     cluster assignments, and PCA components.
@@ -16,7 +16,7 @@ def process_embeddings(df, variance_threshold=0.8):
     Parameters:
     -----------
     df : pandas.DataFrame
-        Input dataframe with columns: 'Word Sense', 'Verb', 'Usage', 'Is FOS'
+        Input dataframe with columns: 'Word Sense', 'Verb', 'Usage'
     variance_threshold : float, default=0.8
         Proportion of variance to capture with PCA components
     embedding_model : SentenceTransformer, default=None
@@ -46,12 +46,17 @@ def process_embeddings(df, variance_threshold=0.8):
 
     # Find optimal number of components
     scaler = StandardScaler()
-    verb_components = get_components_for_variance(
-        df_pca_verb, variance_threshold, scaler)
-    usage_components = get_components_for_variance(
-        df_pca_usage, variance_threshold, scaler)
-    sentence_components = get_components_for_variance(
-        df_pca_sentence, variance_threshold, scaler)
+
+    # Reserve the PCA components since it bugs out
+    if variance_threshold >= 1:
+        verb_components = usage_components = sentence_components = 768
+    else:
+        verb_components = get_components_for_variance(
+            df_pca_verb, variance_threshold, scaler)
+        usage_components = get_components_for_variance(
+            df_pca_usage, variance_threshold, scaler)
+        sentence_components = get_components_for_variance(
+            df_pca_sentence, variance_threshold, scaler)
 
     print(f"Number of components for {variance_threshold*100}% variance:")
     print(f"Verb: {verb_components} components")
@@ -59,10 +64,16 @@ def process_embeddings(df, variance_threshold=0.8):
     print(f"Sentence: {sentence_components} components")
 
     # Find optimal number of clusters
-    verb_k = find_optimal_clusters(df_pca_verb, verb_components, scaler)
-    usage_k = find_optimal_clusters(df_pca_usage, usage_components, scaler)
-    sentence_k = find_optimal_clusters(
-        df_pca_sentence, sentence_components, scaler)
+
+    # Low scores might be
+    if unify_clusters:
+        verb_k = usage_k = sentence_k = find_optimal_clusters(
+            pd.concat([df_pca_verb, df_pca_usage, df_pca_sentence], axis=1), 768, scaler)
+    else:
+        verb_k = find_optimal_clusters(df_pca_verb, verb_components, scaler)
+        usage_k = find_optimal_clusters(df_pca_usage, usage_components, scaler)
+        sentence_k = find_optimal_clusters(
+            df_pca_sentence, sentence_components, scaler)
 
     print(f"Optimal number of clusters:")
     print(f"Verb: {verb_k} clusters")
