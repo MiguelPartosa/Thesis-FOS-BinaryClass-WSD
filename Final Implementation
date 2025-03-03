@@ -1,0 +1,1417 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "gpuType": "T4",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    },
+    "accelerator": "GPU"
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/MiguelPartosa/Thesis-FOS-BinaryClass-WSD/blob/main/Final%20Implementation\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "N1aeF2PrhqlI",
+        "outputId": "764206dd-ae78-4e55-d649-2d502d1891f3",
+        "collapsed": true
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: transformers in /usr/local/lib/python3.11/dist-packages (4.48.3)\n",
+            "Requirement already satisfied: filelock in /usr/local/lib/python3.11/dist-packages (from transformers) (3.17.0)\n",
+            "Requirement already satisfied: huggingface-hub<1.0,>=0.24.0 in /usr/local/lib/python3.11/dist-packages (from transformers) (0.28.1)\n",
+            "Requirement already satisfied: numpy>=1.17 in /usr/local/lib/python3.11/dist-packages (from transformers) (1.26.4)\n",
+            "Requirement already satisfied: packaging>=20.0 in /usr/local/lib/python3.11/dist-packages (from transformers) (24.2)\n",
+            "Requirement already satisfied: pyyaml>=5.1 in /usr/local/lib/python3.11/dist-packages (from transformers) (6.0.2)\n",
+            "Requirement already satisfied: regex!=2019.12.17 in /usr/local/lib/python3.11/dist-packages (from transformers) (2024.11.6)\n",
+            "Requirement already satisfied: requests in /usr/local/lib/python3.11/dist-packages (from transformers) (2.32.3)\n",
+            "Requirement already satisfied: tokenizers<0.22,>=0.21 in /usr/local/lib/python3.11/dist-packages (from transformers) (0.21.0)\n",
+            "Requirement already satisfied: safetensors>=0.4.1 in /usr/local/lib/python3.11/dist-packages (from transformers) (0.5.3)\n",
+            "Requirement already satisfied: tqdm>=4.27 in /usr/local/lib/python3.11/dist-packages (from transformers) (4.67.1)\n",
+            "Requirement already satisfied: fsspec>=2023.5.0 in /usr/local/lib/python3.11/dist-packages (from huggingface-hub<1.0,>=0.24.0->transformers) (2024.10.0)\n",
+            "Requirement already satisfied: typing-extensions>=3.7.4.3 in /usr/local/lib/python3.11/dist-packages (from huggingface-hub<1.0,>=0.24.0->transformers) (4.12.2)\n",
+            "Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.11/dist-packages (from requests->transformers) (3.4.1)\n",
+            "Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.11/dist-packages (from requests->transformers) (3.10)\n",
+            "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.11/dist-packages (from requests->transformers) (2.3.0)\n",
+            "Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.11/dist-packages (from requests->transformers) (2025.1.31)\n",
+            "Requirement already satisfied: openpyxl in /usr/local/lib/python3.11/dist-packages (3.1.5)\n",
+            "Requirement already satisfied: et-xmlfile in /usr/local/lib/python3.11/dist-packages (from openpyxl) (2.0.0)\n"
+          ]
+        }
+      ],
+      "source": [
+        "!pip install transformers\n",
+        "!pip install openpyxl"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import warnings\n",
+        "warnings.simplefilter('ignore')\n",
+        "import numpy as np\n",
+        "import pandas as pd\n",
+        "from tqdm import tqdm\n",
+        "from sklearn import metrics\n",
+        "import transformers\n",
+        "import torch\n",
+        "import os\n",
+        "from torch.utils.data import Dataset, DataLoader, RandomSampler, SequentialSampler\n",
+        "from transformers import DistilBertTokenizer, DistilBertModel\n",
+        "import logging\n",
+        "logging.basicConfig(level=logging.ERROR)"
+      ],
+      "metadata": {
+        "id": "-fYf-UeMh48s"
+      },
+      "execution_count": 2,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "fos_train_df = pd.read_excel('/content/Train_Set_WLabels.xlsx')\n",
+        "fos_test_df = pd.read_excel('/content/Test_Set_WLabels.xlsx')"
+      ],
+      "metadata": {
+        "id": "7L78xjfojl4Y"
+      },
+      "execution_count": 3,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "fos_train_df = fos_train_df.rename(columns={\"Is FOS\": \"is_fos\"})\n",
+        "fos_test_df = fos_test_df.rename(columns={\"Is FOS\": \"is_fos\"})"
+      ],
+      "metadata": {
+        "id": "lA7Cn8O_n8a6"
+      },
+      "execution_count": 4,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from transformers import pipeline #cbert\n",
+        "\n",
+        "unmasker = pipeline('fill-mask', model='GianTan/CBERTo')\n",
+        "unmasker(\"Hello I'm a [MASK] model.\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "EPasOQgRh_BJ",
+        "outputId": "bc007fa8-c740-4a21-bb10-5c29c4fe0953"
+      },
+      "execution_count": 5,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "Device set to use cuda:0\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "[{'score': 0.017744773998856544,\n",
+              "  'token': 457,\n",
+              "  'token_str': 'sentence',\n",
+              "  'sequence': \"hello i'm a sentence model.\"},\n",
+              " {'score': 0.013290436938405037,\n",
+              "  'token': 1461,\n",
+              "  'token_str': 'given',\n",
+              "  'sequence': \"hello i'm a given model.\"},\n",
+              " {'score': 0.010848677717149258,\n",
+              "  'token': 4051,\n",
+              "  'token_str': 'story',\n",
+              "  'sequence': \"hello i'm a story model.\"},\n",
+              " {'score': 0.009323697537183762,\n",
+              "  'token': 3482,\n",
+              "  'token_str': 'text',\n",
+              "  'sequence': \"hello i'm a text model.\"},\n",
+              " {'score': 0.00910557247698307,\n",
+              "  'token': 1241,\n",
+              "  'token_str': 'list',\n",
+              "  'sequence': \"hello i'm a list model.\"}]"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 5
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "tokenizer = DistilBertTokenizer.from_pretrained('GianTan/CBERTo',truncation=True, do_lower_case=False)\n",
+        "model = DistilBertModel.from_pretrained(\"GianTan/CBERTo\")"
+      ],
+      "metadata": {
+        "id": "guVY9UnwiLMO"
+      },
+      "execution_count": 6,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "input = tokenizer('Murag mag bata nis Gian.', return_tensors='pt')\n",
+        "input"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "QUbzKdrmkfzd",
+        "outputId": "08b42c06-eb36-4e2d-e7ed-0e55d02ce7e0"
+      },
+      "execution_count": 7,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "{'input_ids': tensor([[   2,    1,  223,  770, 4073,    1,   20,    3]]), 'attention_mask': tensor([[1, 1, 1, 1, 1, 1, 1, 1]])}"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 7
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "output = model(input_ids=input['input_ids'], attention_mask=input['attention_mask'])\n",
+        "output"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "iAXLDSxHkxyE",
+        "outputId": "1d1e23d2-a976-4005-e206-52692f22a679"
+      },
+      "execution_count": 8,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "BaseModelOutput(last_hidden_state=tensor([[[ 1.8262, -2.2653, -0.2164,  ..., -0.3576,  0.7976,  0.1592],\n",
+              "         [ 0.1707, -0.2825,  0.3335,  ...,  0.9750,  1.2135,  1.2772],\n",
+              "         [-1.1447,  0.3449, -0.0371,  ..., -0.7239,  1.3636, -1.6204],\n",
+              "         ...,\n",
+              "         [-1.5133, -1.6592,  0.0718,  ...,  0.8302,  1.3838, -0.4917],\n",
+              "         [-1.5697, -0.8247, -2.1634,  ..., -0.4481,  0.8399, -1.4725],\n",
+              "         [-1.5261, -0.4124, -0.6070,  ...,  0.5469, -1.1056, -0.0184]]],\n",
+              "       grad_fn=<NativeLayerNormBackward0>), hidden_states=None, attentions=None)"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 8
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Sections of config\n",
+        "# Defining some key variables that will be used later on in the training\n",
+        "MAX_LEN = 256\n",
+        "TRAIN_BATCH_SIZE = 128\n",
+        "VALID_BATCH_SIZE = 128\n",
+        "EPOCHS = 14\n",
+        "LEARNING_RATE = 4e-05"
+      ],
+      "metadata": {
+        "id": "aingsdG8iuCQ"
+      },
+      "execution_count": 9,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "class FOS_Classification(Dataset):\n",
+        "\n",
+        "    def __init__(self, dataframe, tokenizer, max_len):\n",
+        "        self.tokenizer = tokenizer\n",
+        "        self.data = dataframe\n",
+        "        self.text = dataframe.Usage\n",
+        "        self.targets = self.data.is_fos\n",
+        "        self.max_len = max_len\n",
+        "\n",
+        "    def __len__(self):\n",
+        "        return len(self.text)\n",
+        "\n",
+        "    def __getitem__(self, index):\n",
+        "        text = str(self.text[index])\n",
+        "        text = \" \".join(text.split())\n",
+        "\n",
+        "        inputs = self.tokenizer.encode_plus(\n",
+        "            text,\n",
+        "            None,\n",
+        "            add_special_tokens=True,\n",
+        "            max_length=self.max_len,\n",
+        "            truncation=True,\n",
+        "            pad_to_max_length=True,\n",
+        "            return_token_type_ids=True\n",
+        "        )\n",
+        "        ids = inputs['input_ids']\n",
+        "        mask = inputs['attention_mask']\n",
+        "        token_type_ids = inputs[\"token_type_ids\"]\n",
+        "\n",
+        "\n",
+        "        return {\n",
+        "            'ids': torch.tensor(ids, dtype=torch.long),\n",
+        "            'mask': torch.tensor(mask, dtype=torch.long),\n",
+        "            'token_type_ids': torch.tensor(token_type_ids, dtype=torch.long),\n",
+        "            'targets': torch.tensor(self.targets[index], dtype=torch.float)\n",
+        "        }"
+      ],
+      "metadata": {
+        "id": "2IC6Q2S6iXvs"
+      },
+      "execution_count": 10,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "training_set = FOS_Classification(fos_train_df, tokenizer, MAX_LEN)\n",
+        "testing_set = FOS_Classification(fos_test_df, tokenizer, MAX_LEN)"
+      ],
+      "metadata": {
+        "id": "lblv4bmHi257"
+      },
+      "execution_count": 11,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "train_params = {'batch_size': TRAIN_BATCH_SIZE,\n",
+        "                'shuffle': True,\n",
+        "                'num_workers': 0\n",
+        "                }\n",
+        "\n",
+        "test_params = {'batch_size': VALID_BATCH_SIZE,\n",
+        "                'shuffle': True,\n",
+        "                'num_workers': 0\n",
+        "                }\n",
+        "\n",
+        "training_loader = DataLoader(training_set, **train_params)\n",
+        "testing_loader = DataLoader(testing_set, **test_params)"
+      ],
+      "metadata": {
+        "id": "tRMJgndnjEKT"
+      },
+      "execution_count": 12,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from torch import cuda\n",
+        "device = 'cuda' if cuda.is_available() else 'cpu'"
+      ],
+      "metadata": {
+        "id": "ydrp_qGfoRsk"
+      },
+      "execution_count": 13,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "class BertClass(torch.nn.Module):\n",
+        "    def __init__(self):\n",
+        "        super(BertClass, self).__init__()\n",
+        "        self.l1 = DistilBertModel.from_pretrained('GianTan/CBERTo')\n",
+        "        self.pre_classifier = torch.nn.Linear(768, 768)\n",
+        "        self.dropout = torch.nn.Dropout(0.3)\n",
+        "\n",
+        "        self.pre_classifier2 = torch.nn.Linear(768, 768)\n",
+        "        self.dropout2 = torch.nn.Dropout(0.3)\n",
+        "\n",
+        "        self.classifier = torch.nn.Linear(768,1)\n",
+        "\n",
+        "    def forward(self, input_ids, attention_mask, token_type_ids):\n",
+        "        output_1 = self.l1(input_ids=input_ids, attention_mask=attention_mask)\n",
+        "        hidden_state = output_1[0]\n",
+        "        pooler = hidden_state[:, 0]\n",
+        "        pooler = self.pre_classifier(pooler)\n",
+        "        pooler = torch.nn.Tanh()(pooler)\n",
+        "        pooler = self.dropout(pooler)\n",
+        "        pooler = self.pre_classifier2(pooler)\n",
+        "        pooler = torch.nn.Tanh()(pooler)\n",
+        "        pooler = self.dropout2(pooler)\n",
+        "\n",
+        "\n",
+        "        output = self.classifier(pooler)\n",
+        "        return output.squeeze(1)\n",
+        "\n",
+        "\n",
+        "model = BertClass()\n",
+        "model.to(device)\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "TbTZVRnsjHaC",
+        "outputId": "bdfc71fa-f057-4c14-9e81-6d771a9a4524"
+      },
+      "execution_count": 14,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "BertClass(\n",
+              "  (l1): DistilBertModel(\n",
+              "    (embeddings): Embeddings(\n",
+              "      (word_embeddings): Embedding(30000, 768, padding_idx=0)\n",
+              "      (position_embeddings): Embedding(256, 768)\n",
+              "      (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)\n",
+              "      (dropout): Dropout(p=0.1, inplace=False)\n",
+              "    )\n",
+              "    (transformer): Transformer(\n",
+              "      (layer): ModuleList(\n",
+              "        (0-5): 6 x TransformerBlock(\n",
+              "          (attention): DistilBertSdpaAttention(\n",
+              "            (dropout): Dropout(p=0.1, inplace=False)\n",
+              "            (q_lin): Linear(in_features=768, out_features=768, bias=True)\n",
+              "            (k_lin): Linear(in_features=768, out_features=768, bias=True)\n",
+              "            (v_lin): Linear(in_features=768, out_features=768, bias=True)\n",
+              "            (out_lin): Linear(in_features=768, out_features=768, bias=True)\n",
+              "          )\n",
+              "          (sa_layer_norm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)\n",
+              "          (ffn): FFN(\n",
+              "            (dropout): Dropout(p=0.1, inplace=False)\n",
+              "            (lin1): Linear(in_features=768, out_features=3072, bias=True)\n",
+              "            (lin2): Linear(in_features=3072, out_features=768, bias=True)\n",
+              "            (activation): GELUActivation()\n",
+              "          )\n",
+              "          (output_layer_norm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)\n",
+              "        )\n",
+              "      )\n",
+              "    )\n",
+              "  )\n",
+              "  (pre_classifier): Linear(in_features=768, out_features=768, bias=True)\n",
+              "  (dropout): Dropout(p=0.3, inplace=False)\n",
+              "  (pre_classifier2): Linear(in_features=768, out_features=768, bias=True)\n",
+              "  (dropout2): Dropout(p=0.3, inplace=False)\n",
+              "  (classifier): Linear(in_features=768, out_features=1, bias=True)\n",
+              ")"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 14
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def loss_fn(outputs, targets):\n",
+        "    return torch.nn.BCEWithLogitsLoss()(outputs, targets)"
+      ],
+      "metadata": {
+        "id": "7PNjUQCVjN_Z"
+      },
+      "execution_count": 15,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "optimizer = torch.optim.Adam(params =  model.parameters(), lr=LEARNING_RATE)"
+      ],
+      "metadata": {
+        "id": "BClbepJhjPhI"
+      },
+      "execution_count": 16,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def train(epoch):\n",
+        "    model.train()\n",
+        "    for _,data in tqdm(enumerate(training_loader, 0)):\n",
+        "        ids = data['ids'].to(device, dtype = torch.long)\n",
+        "        mask = data['mask'].to(device, dtype = torch.long)\n",
+        "        token_type_ids = data['token_type_ids'].to(device, dtype = torch.long)\n",
+        "        targets = data['targets'].to(device, dtype = torch.float)\n",
+        "\n",
+        "        outputs = model(ids, mask, token_type_ids)\n",
+        "\n",
+        "        optimizer.zero_grad()\n",
+        "        loss = loss_fn(outputs, targets)\n",
+        "        if _%5000==0:\n",
+        "            print(f'Epoch: {epoch}, Loss:  {loss.item()}')\n",
+        "\n",
+        "        loss.backward()\n",
+        "        optimizer.step()"
+      ],
+      "metadata": {
+        "id": "y9RxxRvNjQcY"
+      },
+      "execution_count": 17,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "for epoch in range(EPOCHS):\n",
+        "    train(epoch)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "pphxWqlwjSFy",
+        "outputId": "60ae7436-b3b7-4e37-d83c-cafd0fd791dc"
+      },
+      "execution_count": 18,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "\r0it [00:00, ?it/s]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 0, Loss:  0.7084692120552063\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:16,  2.08s/it]\n",
+            "1it [00:02,  2.20s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 1, Loss:  0.5628543496131897\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:17,  2.22s/it]\n",
+            "1it [00:02,  2.26s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 2, Loss:  0.2824024558067322\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.27s/it]\n",
+            "1it [00:02,  2.34s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 3, Loss:  0.2861154079437256\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.33s/it]\n",
+            "1it [00:02,  2.38s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 4, Loss:  0.05586991086602211\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.38s/it]\n",
+            "1it [00:02,  2.45s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 5, Loss:  0.07907815277576447\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.44s/it]\n",
+            "1it [00:02,  2.51s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 6, Loss:  0.05957923084497452\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.47s/it]\n",
+            "1it [00:02,  2.49s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 7, Loss:  0.04061730206012726\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.43s/it]\n",
+            "1it [00:02,  2.45s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 8, Loss:  0.009161284193396568\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.42s/it]\n",
+            "1it [00:02,  2.47s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 9, Loss:  0.007690325379371643\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.43s/it]\n",
+            "1it [00:02,  2.48s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 10, Loss:  0.005314026027917862\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.44s/it]\n",
+            "1it [00:02,  2.48s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 11, Loss:  0.008957335725426674\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.44s/it]\n",
+            "1it [00:02,  2.49s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 12, Loss:  0.0025346935726702213\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.44s/it]\n",
+            "1it [00:02,  2.48s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 13, Loss:  0.00671275844797492\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:19,  2.43s/it]\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "\n",
+        "def test_model(item):\n",
+        "  input_text = item\n",
+        "  encoded_text = tokenizer.encode_plus(\n",
+        "      input_text,\n",
+        "      None,\n",
+        "      add_special_tokens=True,\n",
+        "      max_length=MAX_LEN,\n",
+        "      pad_to_max_length=True,\n",
+        "      return_token_type_ids=True\n",
+        "  )\n",
+        "\n",
+        "  # Convert the input to tensors\n",
+        "  input_ids = torch.tensor(encoded_text['input_ids']).unsqueeze(0)\n",
+        "  input_mask = torch.tensor(encoded_text['attention_mask']).unsqueeze(0)\n",
+        "  segment_ids = torch.tensor(encoded_text['token_type_ids']).unsqueeze(0)\n",
+        "\n",
+        "  # Move tensors to the device\n",
+        "  input_ids = input_ids.to(device)\n",
+        "  input_mask = input_mask.to(device)\n",
+        "  segment_ids = segment_ids.to(device)\n",
+        "\n",
+        "  # Make predictions\n",
+        "  with torch.no_grad():\n",
+        "      outputs = model(input_ids, input_mask, segment_ids)\n",
+        "\n",
+        "  # Apply sigmoid activation function\n",
+        "  outputs = torch.sigmoid(outputs)\n",
+        "\n",
+        "  # Convert the outputs to numpy array\n",
+        "  outputs = outputs.cpu().detach().numpy()\n",
+        "\n",
+        "  return outputs"
+      ],
+      "metadata": {
+        "id": "rzhah3vHjbNK"
+      },
+      "execution_count": 19,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def validation(testing_loader):\n",
+        "    model.eval()\n",
+        "    fin_targets=[]\n",
+        "    fin_outputs=[]\n",
+        "\n",
+        "    with torch.no_grad():\n",
+        "        for _, data in tqdm(enumerate(testing_loader, 0)):\n",
+        "            ids = data['ids'].to(device, dtype = torch.long)\n",
+        "            mask = data['mask'].to(device, dtype = torch.long)\n",
+        "            token_type_ids = data['token_type_ids'].to(device, dtype = torch.long)\n",
+        "            targets = data['targets'].to(device, dtype = torch.float)\n",
+        "            outputs = model(ids, mask, token_type_ids)\n",
+        "            fin_targets.extend(targets.cpu().detach().numpy().tolist())\n",
+        "            fin_outputs.extend(torch.sigmoid(outputs).cpu().detach().numpy().tolist())\n",
+        "\n",
+        "    return fin_outputs, fin_targets\n"
+      ],
+      "metadata": {
+        "id": "pYFYxwn7rrIP"
+      },
+      "execution_count": 20,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "outputs, targets = validation(testing_loader)\n",
+        "\n",
+        "final_outputs = np.array(outputs) >= 0.9\n",
+        "\n",
+        "print(final_outputs)\n",
+        "print(targets)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "ZiGsm9Gvrz9X",
+        "outputId": "77131f37-f4b3-40f7-d8f4-1c17a6ad95b0"
+      },
+      "execution_count": 21,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "2it [00:03,  1.64s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "[False False False False  True  True False False  True False  True False\n",
+            "  True  True False False False  True  True False  True  True  True  True\n",
+            "  True False False False  True False  True  True False False  True False\n",
+            "  True  True  True False  True False False False  True False False  True\n",
+            " False  True False False False False  True False False False False False\n",
+            " False  True  True  True  True  True False False False  True  True False\n",
+            "  True  True False  True  True False False  True  True False False  True\n",
+            "  True False False  True  True False  True False  True  True  True False\n",
+            "  True False  True False False False False False False False False  True\n",
+            "  True False  True False False False  True  True  True  True False  True\n",
+            "  True False  True False  True  True False  True  True False  True False\n",
+            " False  True  True  True  True  True False False  True False False False\n",
+            " False  True False  True False  True False  True False  True  True  True\n",
+            " False False False  True  True  True False False  True False  True  True\n",
+            " False False False False  True False  True  True  True  True False False\n",
+            "  True False  True  True False False False False False  True  True  True\n",
+            " False  True False False  True False  True  True  True False False False\n",
+            " False False  True  True  True False False False False  True False  True\n",
+            " False  True  True  True  True  True False  True  True False False  True\n",
+            "  True False  True  True False  True  True False False  True  True False\n",
+            "  True  True False False]\n",
+            "[0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.metrics import accuracy_score\n",
+        "from sklearn.metrics import f1_score\n",
+        "from sklearn.metrics import precision_score\n",
+        "from sklearn.metrics import recall_score\n",
+        "\n",
+        "y_pred = np.array(targets)\n",
+        "y_true = np.array(final_outputs)\n",
+        "\n",
+        "accuracy = accuracy_score(y_true, y_pred)\n",
+        "print(f'Accuracy Score: {accuracy:.6f}')\n",
+        "\n",
+        "precision = precision_score(y_true, y_pred)\n",
+        "print(f'Precision Score: {precision:.6f}')\n",
+        "\n",
+        "recall = recall_score(y_true, y_pred)\n",
+        "print(f'Recall Score: {recall:.6f}')\n",
+        "\n",
+        "score_dat = f1_score(y_true, y_pred)\n",
+        "print(f'F1 Score: {score_dat:.6f}')\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "qvEKLpnMrgZK",
+        "outputId": "336e7542-322d-4f15-a8ce-1589f73da8d9"
+      },
+      "execution_count": 22,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Accuracy Score: 0.909836\n",
+            "Precision Score: 0.901639\n",
+            "Recall Score: 0.916667\n",
+            "F1 Score: 0.909091\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import numpy as np\n",
+        "import matplotlib.pyplot as plt\n",
+        "from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay\n",
+        "\n",
+        "# Assuming targets are the true labels and final_outputs are the predicted labels\n",
+        "y_true = np.array(targets)\n",
+        "y_pred = np.array(final_outputs)\n",
+        "\n",
+        "class_labels = [\"Literal (0)\", \"Non Literal (1)\"]\n",
+        "\n",
+        "# Compute confusion matrix\n",
+        "cm = confusion_matrix(y_true, y_pred)\n",
+        "\n",
+        "# Display confusion matrix\n",
+        "disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_labels)\n",
+        "disp.plot(cmap=\"Blues\")  # You can change the colormap if needed\n",
+        "\n",
+        "plt.yticks(rotation=90)\n",
+        "\n",
+        "plt.show()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 449
+        },
+        "id": "mFXhPA-sbGeX",
+        "outputId": "f5301c2a-507d-4861-9ccb-1ff4a3e4ecb5"
+      },
+      "execution_count": 23,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<Figure size 640x480 with 2 Axes>"
+            ],
+            "image/png": "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g406AwCQMAEYNGjQA+v/3vxBRERkdGZeCjApKQkA0KtXL53y5ORkDB8+HACwbNkyWFlZISwsDKWlpQgNDcVHH31kQJA1kywBUCqV/1g/bNgwM0VDRERkerVZesfOzg4rVqzAihUrTBqLZAlAcnKyVI8mIiICIO+9ADgGgIiIZMvcSwE/TDgLgIiISIbYAkBERLJl7lkADxMmAEREJF8yHgTALgAiIiIZeihaAC5cuIADBw7g5s2b0Gg0OnWzZs2SKCoiIqrvZNwAIH0CsHr1arzzzjtwd3eHSqWC8JchlYIgMAEgIiKTkfMsAMkTgAULFmDhwoWYOnWq1KEQERHJhuQJwO3bt/HKK69IHQYREcmSYbMALLkTQPJBgK+88gr+97//SR0GERHJkLl3A3yYSN4C0KJFC8TExODo0aMICAiAjY2NTv348eMlioyIiKj+kjwBWLVqFZycnJCamorU1FSdOkEQmAAQERGZgOQJQGZmptQhEBGRTHEWwEOiaptEwZL/RomIyGLIeSlgyQcBAsCGDRsQEBAAe3t72Nvbo3379vjkk0+kDouIiKjekrwFYOnSpYiJicHYsWPRvXt3AMChQ4fw9ttv448//kBUVJTEERIRUX3FLgAJJSYmIikpCcOGDdOW9e/fH+3atcOcOXOYABARkcnIeSlgybsAbty4gW7dulUr79atG27cuCFBRERERPWf5AlAixYtsG3btmrlW7duRcuWLSWIiIiIZEMwwmGhJO8CmDt3Ll577TV8//332jEAhw8fxr59+2pMDIiIiIyFswAkFBYWhmPHjsHd3R0pKSlISUmBu7s7jh8/jpdeeknq8IiIiOolyVsAAKBTp07473//K3UYREQkM5wFQEREJENyngUgWQJgZWX1jyv+CYKAiooKM0VERESyI+MMQLIEYMeOHfetS0tLQ0JCAjQajRkjIiIikg/JEoABAwZUK8vIyMC0adOwa9cuhIeHY968eRJERkREcsFZABK7fv06Ro8ejYCAAFRUVOD06dNYv349fH19pQ6NiIjqsapBgIYclkrSQYAFBQWIjY1FYmIiAgMDsW/fPjz11FMG3bNqR8E7d9TGCJHooSRWlkodApHJiJVl9/775+9zU1KrDfusMPR6KUmWACxevBiLFi2CSqXC5s2ba+wSqIs7d+4AANo8ytYDIiJLdufOHSiVSpPc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\n"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import drive\n",
+        "\n",
+        "# Mount Google Drive\n",
+        "drive.mount('/content/drive')\n",
+        "\n",
+        "# Define directory inside Google Drive\n",
+        "drive_checkpoint_dir = \"/content/drive/My Drive/CBERT_Checkpoints\"\n",
+        "os.makedirs(drive_checkpoint_dir, exist_ok=True)\n",
+        "\n",
+        "def save_checkpoint(epoch, model, optimizer, loss):\n",
+        "    checkpoint_path = f\"{drive_checkpoint_dir}/checkpoint_epoch_{epoch}.pth\"\n",
+        "\n",
+        "    # Save the checkpoint to Google Drive\n",
+        "    torch.save({\n",
+        "        'epoch': epoch,\n",
+        "        'model_state_dict': model.state_dict(),\n",
+        "        'optimizer_state_dict': optimizer.state_dict(),\n",
+        "        'loss': loss\n",
+        "    }, checkpoint_path)\n",
+        "\n",
+        "    print(f\"Checkpoint saved at: {checkpoint_path}\")\n",
+        "\n",
+        "def train(epoch):\n",
+        "    model.train()\n",
+        "    total_loss = 0\n",
+        "    for _, data in tqdm(enumerate(training_loader, 0)):\n",
+        "        ids = data['ids'].to(device, dtype=torch.long)\n",
+        "        mask = data['mask'].to(device, dtype=torch.long)\n",
+        "        token_type_ids = data['token_type_ids'].to(device, dtype=torch.long)\n",
+        "        targets = data['targets'].to(device, dtype=torch.float)\n",
+        "\n",
+        "        outputs = model(ids, mask, token_type_ids)\n",
+        "\n",
+        "        optimizer.zero_grad()\n",
+        "        loss = loss_fn(outputs, targets)\n",
+        "        total_loss += loss.item()\n",
+        "\n",
+        "        if _ % 5000 == 0:\n",
+        "            print(f'Epoch: {epoch}, Step: {_}, Loss: {loss.item()}')\n",
+        "\n",
+        "        loss.backward()\n",
+        "        optimizer.step()\n",
+        "\n",
+        "    #  Save checkpoint after each epoch (to Google Drive)\n",
+        "    save_checkpoint(epoch, model, optimizer, total_loss / len(training_loader))\n",
+        "\n",
+        "#  Run training with checkpointing\n",
+        "for epoch in range(EPOCHS):\n",
+        "    train(epoch)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "dP3Q10q5bNk-",
+        "outputId": "f5b823d8-8d25-4f08-85b9-a8163e4525e7"
+      },
+      "execution_count": 25,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Mounted at /content/drive\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.09s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 0, Step: 0, Loss: 0.0018264141399413347\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.30s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_0.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.07s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 1, Step: 0, Loss: 0.0013451643753796816\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.37s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_1.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.04s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 2, Step: 0, Loss: 0.0012741880491375923\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.33s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_2.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.02s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 3, Step: 0, Loss: 0.0010484238155186176\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.30s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_3.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.04s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 4, Step: 0, Loss: 0.000997812021523714\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.33s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_4.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.04s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 5, Step: 0, Loss: 0.0009720957605168223\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.35s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_5.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.29s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 6, Step: 0, Loss: 0.0008267320808954537\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.36s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_6.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.08s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 7, Step: 0, Loss: 0.0006737295771017671\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.36s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_7.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.02s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 8, Step: 0, Loss: 0.0006678314530290663\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.33s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_8.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.08s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 9, Step: 0, Loss: 0.0005782798398286104\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.33s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_9.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.06s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 10, Step: 0, Loss: 0.000570910342503339\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.36s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_10.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.03s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 11, Step: 0, Loss: 0.0005594937247224152\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.33s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_11.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.02s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 12, Step: 0, Loss: 0.0005134118837304413\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.31s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_12.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "1it [00:01,  1.04s/it]"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch: 13, Step: 0, Loss: 0.000445310230134055\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "8it [00:18,  2.34s/it]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "✅ Checkpoint saved at: /content/drive/My Drive/CBERT_Checkpoints/checkpoint_epoch_13.pth\n"
+          ]
+        }
+      ]
+    }
+  ]
+}
