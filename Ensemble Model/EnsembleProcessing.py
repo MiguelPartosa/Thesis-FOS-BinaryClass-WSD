@@ -19,8 +19,8 @@ def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
         Input dataframe with columns: 'Word Sense', 'Verb', 'Usage'
     variance_threshold : float, default=0.8
         Proportion of variance to capture with PCA components
-    embedding_model : SentenceTransformer, default=None
-        Pre-loaded SentenceTransformer model. If None, will load 'all-MiniLM-L6-v2'
+    unify_clusters : bool, default=False
+        May prove performance if clusters are all the same for each embeddings set
 
     Returns:
     --------
