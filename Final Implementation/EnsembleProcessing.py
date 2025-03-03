@@ -1,3 +1,6 @@
+# Duplicate File from Ensemble Model, for simplicity
+
+
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -30,6 +33,10 @@ def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
     # Initialize embedding model if not provided
     embedding_model = SentenceTransformer('sentence-transformers/LaBSE')
 
+    # For testing, we have to repeat the samples a few times to generate embeddings
+    if df.shape[0] <= 2:
+        df = df.loc[df.index.repeat(3)].reset_index(drop=True)
+
     # Generate embeddings
     df_embedded = retrieve_embeddings(df, embedding_model)
 
@@ -40,7 +47,7 @@ def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
         'Verb Embeddings', df_embedded['Verb Embeddings'])
     df_pca_usage = generate_embedding_df(
         'Usage Embeddings', df_embedded['Usage Embeddings'])
-    print("UPDATED")
+
     df_similarity = pd.DataFrame({'Similarity Scores': df_embedded.apply(lambda row: ComputeSimilarity(
         row['Sentence Embeddings'], row['Usage Embeddings'], embedding_model), axis=1)})
 
@@ -48,7 +55,7 @@ def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
     scaler = StandardScaler()
 
     # Reserve the PCA components since it bugs out
-    if variance_threshold >= 1:
+    if variance_threshold >= 1 or df.shape[0] <= 10:
         verb_components = usage_components = sentence_components = 768
     else:
         verb_components = get_components_for_variance(
@@ -70,8 +77,10 @@ def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
         verb_k = usage_k = sentence_k = find_optimal_clusters(
             pd.concat([df_pca_verb, df_pca_usage, df_pca_sentence], axis=1), verb_components + usage_components + sentence_components, scaler)
     else:
-        verb_k = find_optimal_clusters(df_pca_verb, verb_components, scaler)
-        usage_k = find_optimal_clusters(df_pca_usage, usage_components, scaler)
+        verb_k = find_optimal_clusters(
+            df_pca_verb, verb_components, scaler)
+        usage_k = find_optimal_clusters(
+            df_pca_usage, usage_components, scaler)
         sentence_k = find_optimal_clusters(
             df_pca_sentence, sentence_components, scaler)
 
@@ -79,6 +88,9 @@ def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
     print(f"Verb: {verb_k} clusters")
     print(f"Usage: {usage_k} clusters")
     print(f"Sentence: {sentence_k} clusters")
+
+    # print(
+    #     f'\nVerb: {df_pca_verb.shape} Usage: {df_pca_usage.shape}, Sentence: {df_pca_sentence.shape}\n')
 
     # Generate PCA-guided K-means
     final_pca_verb = generate_guided_pca(
@@ -91,7 +103,6 @@ def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
     # Combine results
     final_result = pd.concat(
         [df_similarity, final_pca_usage, final_pca_verb, final_pca_sentence], axis=1)
-
     return final_result
 
 
@@ -161,9 +172,14 @@ def find_optimal_clusters(df, n_components, scaler, max_clusters=30):
     """Find the optimal number of clusters using silhouette analysis."""
     # Reduce dimensions with PCA
     scaled_data = scaler.fit_transform(df)
-    pca = PCA(n_components=n_components)
-    pca_data = pca.fit_transform(scaled_data)
-    pca_df = pd.DataFrame(pca_data)
+
+    # Retain full pca with
+    if n_components >= 768:
+        pca_df = scaled_data
+    else:
+        pca = PCA(n_components=n_components)
+        pca_data = pca.fit_transform(scaled_data)
+        pca_df = pd.DataFrame(pca_data)
 
     # Find optimal k
     best_k, best_score = 2, -1
@@ -192,8 +208,10 @@ def generate_guided_pca(df, components, clusters, title, scaler):
     scaled_data = scaler.fit_transform(df)
 
     # Apply PCA
+
+    # Handle case
     if components >= 768:
-        pca_df = scaled_data
+        pca_df = pd.DataFrame(scaled_data)
     else:
         pca = PCA(n_components=components)
         pca_data = pca.fit_transform(scaled_data)
