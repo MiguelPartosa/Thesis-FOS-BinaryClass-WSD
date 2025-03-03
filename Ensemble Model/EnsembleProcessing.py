@@ -68,7 +68,7 @@ def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
     # Low scores might be
     if unify_clusters:
         verb_k = usage_k = sentence_k = find_optimal_clusters(
-            pd.concat([df_pca_verb, df_pca_usage, df_pca_sentence], axis=1), 768, scaler)
+            pd.concat([df_pca_verb, df_pca_usage, df_pca_sentence], axis=1), verb_components + usage_components + sentence_components, scaler)
     else:
         verb_k = find_optimal_clusters(df_pca_verb, verb_components, scaler)
         usage_k = find_optimal_clusters(df_pca_usage, usage_components, scaler)
@@ -192,9 +192,12 @@ def generate_guided_pca(df, components, clusters, title, scaler):
     scaled_data = scaler.fit_transform(df)
 
     # Apply PCA
-    pca = PCA(n_components=components)
-    pca_data = pca.fit_transform(scaled_data)
-    pca_df = pd.DataFrame(pca_data)
+    if components >= 768:
+        pca_df = scaled_data
+    else:
+        pca = PCA(n_components=components)
+        pca_data = pca.fit_transform(scaled_data)
+        pca_df = pd.DataFrame(pca_data)
 
     # Apply KMeans
     kmeans_model = KMeans(n_clusters=clusters,
