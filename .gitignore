@@ -4,4 +4,6 @@ eval/.ipynb_checkpoints/
 .env
 __pycache__
 
+CBERT_checkpoint.pth
+
 Thesis-FOS-BinaryClass-WSD
