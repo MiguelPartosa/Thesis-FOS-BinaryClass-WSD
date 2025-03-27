@@ -30,6 +30,9 @@ def process_embeddings(df, variance_threshold=0.8, unify_clusters=False):
     pandas.DataFrame
         DataFrame with cluster assignments and PCA components
     """
+    # Temporary fix to fake data (in final, NO rows must be null)
+    df.dropna(inplace=True)
+    
     # Initialize embedding model if not provided
     embedding_model = SentenceTransformer('sentence-transformers/LaBSE')
 
